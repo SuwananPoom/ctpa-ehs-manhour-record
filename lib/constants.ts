@@ -115,6 +115,7 @@ export const CHART_COLORS = [
 
 export const MODULE_TABS = [
   { key: "dashboard", label: "Safety KPI", icon: "LayoutDashboard" },
+  { key: "manhours", label: "Man-Hours", icon: "BarChart3" },
   { key: "entry", label: "Daily Manpower", icon: "ClipboardList" },
   { key: "incidents", label: "Incidents", icon: "TriangleAlert" },
   { key: "stats", label: "Statistics", icon: "TrendingUp" },

@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import {
+  BarChart3,
   Building2,
   ClipboardList,
   FileSpreadsheet,
@@ -20,6 +21,7 @@ import { MODULE_TABS, ROLE_LABELS, type ModuleKey } from "@/lib/constants";
 import { Badge } from "@/components/ui";
 import FilterBar from "@/components/FilterBar";
 import Dashboard from "@/components/modules/Dashboard";
+import ManHours from "@/components/modules/ManHours";
 import DataEntry from "@/components/modules/DataEntry";
 import Incidents from "@/components/modules/Incidents";
 import Statistics from "@/components/modules/Statistics";
@@ -29,6 +31,7 @@ import { ContractorSummary, BuildingSummary, WorkTypeSummary } from "@/component
 
 const ICONS: Record<string, React.ReactNode> = {
   LayoutDashboard: <LayoutDashboard size={17} />,
+  BarChart3: <BarChart3 size={17} />,
   ClipboardList: <ClipboardList size={17} />,
   TriangleAlert: <TriangleAlert size={17} />,
   Building2: <Building2 size={17} />,
@@ -45,7 +48,7 @@ export default function AppShell() {
   const [refreshing, setRefreshing] = useState(false);
 
   const tabs = MODULE_TABS.filter((t) => t.key !== "admin" || perms.canAdmin);
-  const showFilters = tab !== "admin" && tab !== "stats";
+  const showFilters = tab !== "admin" && tab !== "stats" && tab !== "manhours";
 
   async function doRefresh() {
     setRefreshing(true);
@@ -116,6 +119,7 @@ export default function AppShell() {
         {showFilters && <FilterBar />}
 
         {tab === "dashboard" && <Dashboard />}
+        {tab === "manhours" && <ManHours />}
         {tab === "entry" && <DataEntry />}
         {tab === "incidents" && <Incidents />}
         {tab === "stats" && <Statistics />}

@@ -277,6 +277,9 @@ function SettingsPanel() {
         <Field label="Baseline Man-hours (ก่อนเริ่มใช้ระบบ)">
           <input type="number" className="input" value={s.baseline_manhours} onChange={(e) => set({ baseline_manhours: Number(e.target.value) })} />
         </Field>
+        <Field label="Man-Hours Target (เป้าหมายรวม)">
+          <input type="number" className="input" value={s.manhour_target} onChange={(e) => set({ manhour_target: Number(e.target.value) })} />
+        </Field>
         <Field label="LTI ล่าสุด (override)">
           <input type="date" className="input" value={s.last_lti_date || ""} onChange={(e) => set({ last_lti_date: e.target.value || null })} />
         </Field>
@@ -338,21 +341,26 @@ function ToolsPanel() {
   const [busy, setBusy] = useState(false);
 
   async function loadSample() {
-    if (!confirm("เพิ่มข้อมูลตัวอย่าง ~14 วันเพื่อทดสอบ Dashboard? (ลบออกได้ภายหลัง)")) return;
+    if (!confirm("เพิ่มข้อมูลตัวอย่าง ~20 สัปดาห์ เพื่อทดสอบ Dashboard ทั้งหมด (Man-Hours / Statistics)? ลบออกได้ภายหลัง")) return;
     setBusy(true);
     try {
       const gc = contractors[0];
       const wt = workTypes;
       const bs = buildings;
       const rows: any[] = [];
-      for (let d = 0; d < 14; d++) {
+      const DAYS = 140; // ~20 weeks
+      for (let d = DAYS - 1; d >= 0; d--) {
         const date = isoDaysAgo(d);
-        const n = 2 + Math.floor(Math.random() * 3);
-        for (let k = 0; k < n; k++) {
+        if (new Date(date).getDay() === 0) continue; // skip Sundays
+        const ramp = (DAYS - d) / DAYS; // grows over time, like a ramping project
+        const crews = 2 + Math.floor(Math.random() * 3);
+        for (let k = 0; k < crews; k++) {
           const w = wt[Math.floor(Math.random() * wt.length)];
           const b = bs[Math.floor(Math.random() * bs.length)];
-          const day = 10 + Math.floor(Math.random() * 40);
-          const night = Math.floor(Math.random() * 12);
+          const base = 12 + Math.round(ramp * 85);
+          const day = base + Math.floor(Math.random() * 18);
+          const night = Math.floor(Math.random() * (1 + ramp * 12));
+          const total = day + night;
           rows.push({
             work_date: date,
             contractor_id: gc?.id || null,
@@ -364,8 +372,8 @@ function ToolsPanel() {
             main_activity: "Sample activity",
             day_shift_manpower: day,
             night_shift_manpower: night,
-            male: day + night - Math.floor((day + night) * 0.1),
-            female: Math.floor((day + night) * 0.1),
+            male: total - Math.floor(total * 0.1),
+            female: Math.floor(total * 0.1),
             working_hours: 10,
             ot_hours: Math.random() > 0.6 ? 2 : 0,
             high_risk_activity: !!w?.high_risk,
@@ -377,8 +385,28 @@ function ToolsPanel() {
       }
       const { error } = await supabase.from("mh_daily_workhours").insert(rows);
       if (error) throw error;
+
+      // A few sample incidents across the period (for the Statistics dashboard)
+      const codes = ["FFH", "STF", "SBFO", "VEH", "MAC", "ETEC"];
+      const types = ["NEAR_MISS", "FIRST_AID", "MEDICAL_TREATMENT", "NEAR_MISS", "RESTRICTED_WORK", "LOST_TIME_INJURY"];
+      const inc = codes.map((code, i) => ({
+        incident_date: isoDaysAgo(8 + i * 20),
+        contractor_id: gc?.id || null,
+        contractor_name: gc?.name || "",
+        building_id: bs[i % bs.length]?.id || null,
+        building_name: bs[i % bs.length]?.name || "",
+        incident_type: types[i],
+        type_code: code,
+        lost_days: types[i] === "LOST_TIME_INJURY" ? 5 : 0,
+        serious_potential: i === 5,
+        description: "Sample incident",
+        reported_by: "Sample",
+        created_by: "SAMPLE",
+      }));
+      await supabase.from("mh_incidents").insert(inc);
+
       await logAudit(session, "IMPORT", "daily_workhours", null, `sample ${rows.length}`);
-      toast(`เพิ่มข้อมูลตัวอย่าง ${rows.length} แถวแล้ว`);
+      toast(`เพิ่มข้อมูลตัวอย่าง ${rows.length} แถว + ${inc.length} incidents`);
       await refresh();
     } catch (e: any) {
       toast(e?.message || "ไม่สำเร็จ", "error");
@@ -390,8 +418,9 @@ function ToolsPanel() {
   async function clearSample() {
     if (!confirm("ลบเฉพาะข้อมูลตัวอย่าง (created_by = SAMPLE) ทั้งหมด?")) return;
     setBusy(true);
-    const { error } = await supabase.from("mh_daily_workhours").delete().eq("created_by", "SAMPLE");
-    if (error) toast(error.message, "error");
+    const a = await supabase.from("mh_daily_workhours").delete().eq("created_by", "SAMPLE");
+    const b = await supabase.from("mh_incidents").delete().eq("created_by", "SAMPLE");
+    if (a.error || b.error) toast(a.error?.message || b.error?.message || "error", "error");
     else {
       toast("ลบข้อมูลตัวอย่างแล้ว");
       await refresh();

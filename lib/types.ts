@@ -127,6 +127,7 @@ export interface AppSettings {
   observation_basis: number;
   baseline_manhours: number;
   baseline_observations: number;
+  manhour_target: number;
   rolling_year_days: number;
   last_lti_date: string | null;
   targets: { trir: number; ltir: number; observation_rate: number; wps: number };

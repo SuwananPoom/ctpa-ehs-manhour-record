@@ -39,6 +39,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   observation_basis: 250000,
   baseline_manhours: 0,
   baseline_observations: 0,
+  manhour_target: 2000000,
   rolling_year_days: 365,
   last_lti_date: null,
   targets: { trir: 0.2, ltir: 0.2, observation_rate: 20, wps: 0.15 },
