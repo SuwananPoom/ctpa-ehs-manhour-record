@@ -14,6 +14,7 @@ Web app สำหรับบันทึก **Manpower / Working Hours รา�
 |---|--------|-----------|
 | 1 | **Daily Manpower & Working Hours** | ฟอร์มบันทึกรายวันครบทุก field (Date, Contractor/Sub, Building, Work Type, Activity, Day/Night shift, Male/Female, Working/OT hours, High Risk, Remark, Submitted by) + ตารางแก้ไข/ลบ |
 | 2 | **Safety KPI Dashboard** | Total/Accumulative/Rolling-Year manhours, Observations + rate /250,000, First Aid, Medical Treatment, LTI, Recordable, Near Miss, **TRIR**, **LTIR**, Days without LTI + กราฟแนวโน้ม |
+| 2b | **Statistics — Incidents & Events Dashboard** | Leading/Lagging indicators (Last Period vs Cumulative), **Type A/B incident classification**, WPS, Loss of Consciousness, TRIR/LTIR/WPS Rate + targets, auto color status (เขียว/เหลือง/แดง), pie/trend charts, Top-5, **Benchmark vs Industry + Variance %**, filter Week/Month/Contractor/Building/Work Type, Export Excel/PDF Weekly EHS Report |
 | 3 | **Contractor Summary** | สรุปตาม Contractor: Manpower, Working Hours, High Risk, Incidents, Recordable, KPI Performance |
 | 4 | **Building / Area Summary** | สรุปตามพื้นที่ + กราฟ Working Hours/Manpower รายวัน |
 | 5 | **Work Type Summary** | filter & สรุปตามประเภทงาน (Civil, Electrical, Lifting, WAH, Hot Work, Confined Space, ฯลฯ) |
@@ -49,11 +50,14 @@ mh_audit_log        บันทึกการใช้งาน
 
 ### ตรรกะการคำนวณ KPI (`lib/kpi.ts`)
 - `Total Man-hours = Σ manpower × (working_hours + ot_hours)`
-- `TRIR = Recordable × 200,000 / Man-hours`
-- `LTIR = LTI × 200,000 / Man-hours`
+- `TRIR = Recordable × 200,000 / Total Workhours`  (เป้าหมาย ≤ 0.20)
+- `LTIR = LTI × 1,000,000 / Total Workhours`
+- `WPS Rate = Lost Workdays / Recordable Cases`  (เป้าหมาย ≤ 0.15)
 - `Observation Rate = Observations × 250,000 / Man-hours`
 - `Days without LTI = วันนี้ − วันที่เกิด LTI ล่าสุด`
 - Recordable = Medical Treatment + Restricted Work + LTI + Fatality · LTI = LTI + Fatality
+- Type A/B = การจำแนกกลไกการเกิดเหตุ (CFSE, VEH, FFH … STF, PA) เก็บใน `mh_incidents.type_code`
+- ค่า basis/target/benchmark ปรับได้ที่ **Admin → KPI Settings**
 
 ---
 

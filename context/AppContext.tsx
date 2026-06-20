@@ -26,16 +26,23 @@ import type {
   WorkType,
 } from "@/lib/types";
 
+const DEFAULT_BENCHMARKS: Record<string, number> = {
+  CFSE: 0, VEH: 0, FFH: 0, SBMO: 0, SBFO: 0, CIBO: 0, SOD: 0, CRANE: 0, FE: 0,
+  STF: 0, ETEC: 0, OTH: 0, CSBO: 0, MAC: 0, DODS: 0, ETBM: 0, ETET: 0, ETHS: 0, PA: 0,
+  TRIR: 0.5, LTIR: 1.0, WPS: 0.15,
+};
+
 const DEFAULT_SETTINGS: AppSettings = {
   site_name: "CTPA BKK22 – Chonburi Tech Park",
   trir_basis: 200000,
-  ltir_basis: 200000,
+  ltir_basis: 1000000,
   observation_basis: 250000,
   baseline_manhours: 0,
   baseline_observations: 0,
   rolling_year_days: 365,
   last_lti_date: null,
-  targets: { trir: 0.5, ltir: 0.2, observation_rate: 20 },
+  targets: { trir: 0.2, ltir: 0.2, observation_rate: 20, wps: 0.15 },
+  benchmarks: DEFAULT_BENCHMARKS,
   auth: { app_password: "ctpa2026", admin_pin: "2580" },
 };
 
@@ -74,6 +81,19 @@ interface AppContextValue {
   error: string | null;
   refresh: () => Promise<void>;
   refreshMaster: () => Promise<void>;
+  getStatHours: (
+    weekStart: string,
+    weekEnd: string,
+    contractorId?: string,
+    buildingId?: string,
+    workTypeId?: string,
+  ) => Promise<StatHours | null>;
+}
+
+export interface StatHours {
+  week_hours: number;
+  cumulative_hours: number;
+  week_manpower: number;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -173,7 +193,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (b.data) setBuildings(b.data as Building[]);
     if (w.data) setWorkTypes(w.data as WorkType[]);
     if (u.data) setUsers(u.data as AppUser[]);
-    if (st.data?.config) setSettings({ ...DEFAULT_SETTINGS, ...(st.data.config as AppSettings) });
+    if (st.data?.config) {
+      const cfg = st.data.config as Partial<AppSettings>;
+      setSettings({
+        ...DEFAULT_SETTINGS,
+        ...cfg,
+        targets: { ...DEFAULT_SETTINGS.targets, ...(cfg.targets || {}) },
+        benchmarks: { ...DEFAULT_SETTINGS.benchmarks, ...(cfg.benchmarks || {}) },
+        auth: { ...DEFAULT_SETTINGS.auth, ...(cfg.auth || {}) },
+      });
+    }
   }, []);
 
   // ----- transactional data within date range -----
@@ -188,12 +217,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           .lte("work_date", filters.dateTo)
           .order("work_date", { ascending: false })
           .limit(20000),
+        // All-time incidents (low volume) — enables cumulative statistics dashboard
         supabase
           .from("mh_incidents")
           .select("*")
-          .gte("incident_date", filters.dateFrom)
-          .lte("incident_date", filters.dateTo)
-          .order("incident_date", { ascending: false }),
+          .order("incident_date", { ascending: false })
+          .limit(5000),
         supabase
           .from("observations")
           .select("*", { count: "exact", head: true })
@@ -254,6 +283,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [settings],
   );
 
+  const getStatHours = useCallback(
+    async (
+      weekStart: string,
+      weekEnd: string,
+      contractorId?: string,
+      buildingId?: string,
+      workTypeId?: string,
+    ): Promise<StatHours | null> => {
+      const { data, error } = await supabase.rpc("mh_stat_hours", {
+        p_week_start: weekStart,
+        p_week_end: weekEnd,
+        p_contractor: contractorId || null,
+        p_building: buildingId || null,
+        p_worktype: workTypeId || null,
+      });
+      if (error) return null;
+      return data as StatHours;
+    },
+    [],
+  );
+
   const perms = useMemo(() => permsFor(session?.role), [session?.role]);
 
   const value: AppContextValue = {
@@ -278,6 +328,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     error,
     refresh,
     refreshMaster,
+    getStatHours,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

@@ -5,7 +5,14 @@ import { Plus, Pencil, Trash2 } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 import { supabase } from "@/lib/supabaseClient";
 import { filterIncidents } from "@/lib/kpi";
-import { INCIDENT_LABELS, INCIDENT_ORDER, LTI_TYPES, RECORDABLE_TYPES } from "@/lib/constants";
+import {
+  INCIDENT_LABELS,
+  INCIDENT_ORDER,
+  LTI_TYPES,
+  RECORDABLE_TYPES,
+  TYPE_A_INCIDENTS,
+  TYPE_B_INCIDENTS,
+} from "@/lib/constants";
 import { fmtDate, todayISO } from "@/lib/format";
 import { Badge, Empty, Modal, Section, useToast } from "@/components/ui";
 import { logAudit } from "@/lib/audit";
@@ -17,6 +24,9 @@ interface IForm {
   contractor_id: string;
   building_id: string;
   incident_type: IncidentType;
+  type_code: string;
+  loss_of_consciousness: boolean;
+  serious_potential: boolean;
   lost_days: number;
   description: string;
   corrective_action: string;
@@ -30,6 +40,9 @@ function blank(reportedBy = ""): IForm {
     contractor_id: "",
     building_id: "",
     incident_type: "NEAR_MISS",
+    type_code: "",
+    loss_of_consciousness: false,
+    serious_potential: false,
     lost_days: 0,
     description: "",
     corrective_action: "",
@@ -64,6 +77,9 @@ export default function Incidents() {
       contractor_id: r.contractor_id || "",
       building_id: r.building_id || "",
       incident_type: r.incident_type,
+      type_code: r.type_code || "",
+      loss_of_consciousness: r.loss_of_consciousness,
+      serious_potential: r.serious_potential,
       lost_days: r.lost_days,
       description: r.description || "",
       corrective_action: r.corrective_action || "",
@@ -86,6 +102,9 @@ export default function Incidents() {
       building_id: form.building_id || null,
       building_name: building?.name || "",
       incident_type: form.incident_type,
+      type_code: form.type_code || null,
+      loss_of_consciousness: form.loss_of_consciousness,
+      serious_potential: form.serious_potential,
       lost_days: Math.max(0, Math.round(form.lost_days)),
       description: form.description || null,
       corrective_action: form.corrective_action || null,
@@ -193,13 +212,33 @@ export default function Incidents() {
             <input type="date" max={todayISO()} className="input" value={form.incident_date} onChange={(e) => patch({ incident_date: e.target.value })} />
           </div>
           <div>
-            <label className="label">Incident Type *</label>
+            <label className="label">Severity Type *</label>
             <select className="input" value={form.incident_type} onChange={(e) => patch({ incident_type: e.target.value as IncidentType })}>
               {INCIDENT_ORDER.map((t) => (
                 <option key={t} value={t}>
                   {INCIDENT_LABELS[t]}
                 </option>
               ))}
+            </select>
+          </div>
+          <div>
+            <label className="label">Incident Category (Type A / B)</label>
+            <select className="input" value={form.type_code} onChange={(e) => patch({ type_code: e.target.value })}>
+              <option value="">— ไม่ระบุ —</option>
+              <optgroup label="Type A">
+                {TYPE_A_INCIDENTS.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.code} — {c.label}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Type B">
+                {TYPE_B_INCIDENTS.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.code} — {c.label}
+                  </option>
+                ))}
+              </optgroup>
             </select>
           </div>
           <div>
@@ -231,6 +270,16 @@ export default function Incidents() {
           <div>
             <label className="label">Reported by</label>
             <input className="input" value={form.reported_by} onChange={(e) => patch({ reported_by: e.target.value })} />
+          </div>
+          <div className="flex flex-wrap gap-4 sm:col-span-2">
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+              <input type="checkbox" className="h-4 w-4 accent-red-500" checked={form.serious_potential} onChange={(e) => patch({ serious_potential: e.target.checked })} />
+              Serious / Potentially Serious (WPS)
+            </label>
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+              <input type="checkbox" className="h-4 w-4 accent-red-500" checked={form.loss_of_consciousness} onChange={(e) => patch({ loss_of_consciousness: e.target.checked })} />
+              Loss of Consciousness
+            </label>
           </div>
           <div className="sm:col-span-2">
             <label className="label">Description</label>

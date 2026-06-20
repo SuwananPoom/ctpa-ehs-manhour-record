@@ -1,4 +1,4 @@
-import { LTI_TYPES, RECORDABLE_TYPES } from "./constants";
+import { codeGroup, LAGGING_TYPES, LTI_TYPES, RECORDABLE_TYPES } from "./constants";
 import { daysBetween, todayISO } from "./format";
 import type {
   AppSettings,
@@ -24,6 +24,7 @@ export function filterWorkhours(rows: DailyWorkhour[], f: Filters): DailyWorkhou
 
 export function filterIncidents(rows: Incident[], f: Filters): Incident[] {
   return rows.filter((r) => {
+    if (r.incident_date < f.dateFrom || r.incident_date > f.dateTo) return false;
     if (f.contractorId && r.contractor_id !== f.contractorId) return false;
     if (f.buildingId && r.building_id !== f.buildingId) return false;
     return true;
@@ -279,4 +280,155 @@ export function dailySeries(rows: DailyWorkhour[], shift: Filters["shift"]): Dai
     map.set(r.work_date, p);
   }
   return Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
+}
+
+// ============================================================
+// Incidents & Events Statistics
+// ============================================================
+
+export interface IncidentBucket {
+  nearMiss: number;
+  propertyDamage: number;
+  firstAid: number;
+  medicalTreatment: number;
+  restrictedWork: number;
+  recordable: number;
+  lti: number;
+  fatality: number;
+  lossOfConsciousness: number;
+  wps: number; // serious & potentially serious count
+  total: number;
+  lostWorkdays: number;
+  trir: number;
+  ltir: number;
+  wpsRate: number;
+}
+
+export function incidentBucket(
+  incidents: Incident[],
+  hours: number,
+  settings: AppSettings,
+): IncidentBucket {
+  const c = (t: string) => incidents.filter((i) => i.incident_type === t).length;
+  const recordable = incidents.filter((i) => RECORDABLE_TYPES.includes(i.incident_type)).length;
+  const lti = incidents.filter((i) => LTI_TYPES.includes(i.incident_type)).length;
+  const lostWorkdays = incidents.reduce((s, i) => s + (i.lost_days || 0), 0);
+  const trirBasis = settings.trir_basis || 200000;
+  const ltirBasis = settings.ltir_basis || 1000000;
+  return {
+    nearMiss: c("NEAR_MISS"),
+    propertyDamage: c("PROPERTY_DAMAGE"),
+    firstAid: c("FIRST_AID"),
+    medicalTreatment: c("MEDICAL_TREATMENT"),
+    restrictedWork: c("RESTRICTED_WORK"),
+    recordable,
+    lti,
+    fatality: c("FATALITY"),
+    lossOfConsciousness: incidents.filter((i) => i.loss_of_consciousness).length,
+    wps: incidents.filter((i) => i.serious_potential).length,
+    total: incidents.length,
+    lostWorkdays,
+    trir: hours > 0 ? (recordable * trirBasis) / hours : 0,
+    ltir: hours > 0 ? (lti * ltirBasis) / hours : 0,
+    wpsRate: recordable > 0 ? lostWorkdays / recordable : 0,
+  };
+}
+
+export function incidentsInRange(incidents: Incident[], from: string, to: string): Incident[] {
+  return incidents.filter((i) => i.incident_date >= from && i.incident_date <= to);
+}
+export function incidentsUpTo(incidents: Incident[], to: string): Incident[] {
+  return incidents.filter((i) => i.incident_date <= to);
+}
+
+export function filterIncidentsByDim(incidents: Incident[], f: Filters): Incident[] {
+  return incidents.filter((i) => {
+    if (f.contractorId && i.contractor_id !== f.contractorId) return false;
+    if (f.buildingId && i.building_id !== f.buildingId) return false;
+    return true;
+  });
+}
+
+/** Count incidents per mechanism code (Type A/B). */
+export function codeCounts(incidents: Incident[]): Record<string, number> {
+  const m: Record<string, number> = {};
+  for (const i of incidents) {
+    if (!i.type_code) continue;
+    m[i.type_code] = (m[i.type_code] || 0) + 1;
+  }
+  return m;
+}
+
+export interface NamedCount {
+  name: string;
+  value: number;
+}
+
+/** Distribution by mechanism code, for a pie chart. */
+export function codeDistribution(incidents: Incident[]): NamedCount[] {
+  const m = codeCounts(incidents);
+  return Object.entries(m)
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value);
+}
+
+/** Near-miss distribution by building/area, for a pie chart. */
+export function nearMissDistribution(incidents: Incident[]): NamedCount[] {
+  const m = new Map<string, number>();
+  for (const i of incidents.filter((x) => x.incident_type === "NEAR_MISS")) {
+    const k = i.building_name || "(ไม่ระบุ)";
+    m.set(k, (m.get(k) || 0) + 1);
+  }
+  return Array.from(m.entries())
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value);
+}
+
+export interface MonthlyIncidentPoint {
+  month: string;
+  total: number;
+  leading: number; // near miss (proactive)
+  lagging: number; // recordable (reactive)
+  lti: number;
+}
+
+export function monthlyIncidentSeries(incidents: Incident[], months = 12): MonthlyIncidentPoint[] {
+  const m = new Map<string, MonthlyIncidentPoint>();
+  for (const i of incidents) {
+    const month = i.incident_date.slice(0, 7); // YYYY-MM
+    const p = m.get(month) || { month, total: 0, leading: 0, lagging: 0, lti: 0 };
+    p.total += 1;
+    if (i.incident_type === "NEAR_MISS") p.leading += 1;
+    if (LAGGING_TYPES.includes(i.incident_type)) p.lagging += 1;
+    if (LTI_TYPES.includes(i.incident_type)) p.lti += 1;
+    m.set(month, p);
+  }
+  return Array.from(m.values())
+    .sort((a, b) => a.month.localeCompare(b.month))
+    .slice(-months);
+}
+
+/** Top-N incident categories (by mechanism code label fallback to incident_type). */
+export function topCategories(incidents: Incident[], n = 5): NamedCount[] {
+  const m = new Map<string, number>();
+  for (const i of incidents) {
+    const k = i.type_code || i.incident_type;
+    m.set(k, (m.get(k) || 0) + 1);
+  }
+  return Array.from(m.entries())
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, n);
+}
+
+export function typeGroupCounts(
+  incidents: Incident[],
+  group: "A" | "B",
+): Record<string, number> {
+  const counts = codeCounts(incidents);
+  const result: Record<string, number> = {};
+  for (const [code, v] of Object.entries(counts)) {
+    if (codeGroup(code) === group) result[code] = v;
+  }
+  return result;
 }

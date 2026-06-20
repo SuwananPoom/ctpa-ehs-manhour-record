@@ -12,6 +12,7 @@ import {
   RefreshCw,
   Settings,
   ShieldCheck,
+  TrendingUp,
   TriangleAlert,
 } from "lucide-react";
 import { useApp } from "@/context/AppContext";
@@ -21,6 +22,7 @@ import FilterBar from "@/components/FilterBar";
 import Dashboard from "@/components/modules/Dashboard";
 import DataEntry from "@/components/modules/DataEntry";
 import Incidents from "@/components/modules/Incidents";
+import Statistics from "@/components/modules/Statistics";
 import ImportExport from "@/components/modules/ImportExport";
 import Admin from "@/components/modules/Admin";
 import { ContractorSummary, BuildingSummary, WorkTypeSummary } from "@/components/modules/Summaries";
@@ -34,6 +36,7 @@ const ICONS: Record<string, React.ReactNode> = {
   HardHat: <HardHat size={17} />,
   FileSpreadsheet: <FileSpreadsheet size={17} />,
   Settings: <Settings size={17} />,
+  TrendingUp: <TrendingUp size={17} />,
 };
 
 export default function AppShell() {
@@ -42,7 +45,7 @@ export default function AppShell() {
   const [refreshing, setRefreshing] = useState(false);
 
   const tabs = MODULE_TABS.filter((t) => t.key !== "admin" || perms.canAdmin);
-  const showFilters = tab !== "admin";
+  const showFilters = tab !== "admin" && tab !== "stats";
 
   async function doRefresh() {
     setRefreshing(true);
@@ -115,6 +118,7 @@ export default function AppShell() {
         {tab === "dashboard" && <Dashboard />}
         {tab === "entry" && <DataEntry />}
         {tab === "incidents" && <Incidents />}
+        {tab === "stats" && <Statistics />}
         {tab === "contractor" && <ContractorSummary />}
         {tab === "building" && <BuildingSummary />}
         {tab === "worktype" && <WorkTypeSummary />}

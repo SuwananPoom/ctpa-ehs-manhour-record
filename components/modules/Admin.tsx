@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { Database, Plus, Save, Trash2, Wrench, Users2, Sliders } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 import { supabase } from "@/lib/supabaseClient";
-import { ROLE_LABELS } from "@/lib/constants";
+import { ALL_INCIDENT_CODES, ROLE_LABELS } from "@/lib/constants";
 import { isoDaysAgo } from "@/lib/format";
 import { Badge, Empty, Section, useToast } from "@/components/ui";
 import { logAudit } from "@/lib/audit";
@@ -286,6 +286,9 @@ function SettingsPanel() {
         <Field label="เป้าหมาย LTIR ≤">
           <input type="number" step={0.01} className="input" value={s.targets.ltir} onChange={(e) => set({ targets: { ...s.targets, ltir: Number(e.target.value) } })} />
         </Field>
+        <Field label="เป้าหมาย WPS Rate ≤">
+          <input type="number" step={0.01} className="input" value={s.targets.wps} onChange={(e) => set({ targets: { ...s.targets, wps: Number(e.target.value) } })} />
+        </Field>
         <Field label="รหัสผ่านเข้าใช้งาน (Shared)">
           <input className="input" value={s.auth.app_password} onChange={(e) => set({ auth: { ...s.auth, app_password: e.target.value } })} />
         </Field>
@@ -293,6 +296,25 @@ function SettingsPanel() {
           <input className="input" value={s.auth.admin_pin} onChange={(e) => set({ auth: { ...s.auth, admin_pin: e.target.value } })} />
         </Field>
       </div>
+      <div className="mt-5">
+        <h4 className="mb-2 text-sm font-semibold text-slate-700">Benchmark Values (Industry / Target)</h4>
+        <p className="mb-2 text-xs text-slate-400">ใช้ในแท็บ Statistics เพื่อเทียบ Project CTP กับค่า Benchmark และคำนวณ Variance %</p>
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+          {(["TRIR", "LTIR", "WPS", ...ALL_INCIDENT_CODES.map((c) => c.code)] as string[]).map((key) => (
+            <div key={key}>
+              <label className="label font-mono">{key}</label>
+              <input
+                type="number"
+                step={0.01}
+                className="input"
+                value={s.benchmarks[key] ?? 0}
+                onChange={(e) => set({ benchmarks: { ...s.benchmarks, [key]: Number(e.target.value) } })}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
       <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
         ⚠ รหัสผ่าน/PIN ถูกตรวจสอบฝั่ง client (โมเดลน้ำหนักเบา) เหมาะสำหรับใช้งานภายในทีม — แนะนำให้เปลี่ยนค่าเริ่มต้น
       </p>

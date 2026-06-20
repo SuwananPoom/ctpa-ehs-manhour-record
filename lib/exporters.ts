@@ -3,10 +3,44 @@
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { INCIDENT_LABELS } from "./constants";
+import { INCIDENT_CODE_LABEL, INCIDENT_LABELS } from "./constants";
 import { fmtDate, fmtInt, fmtNum, todayISO } from "./format";
-import type { KpiResult, GroupSummary } from "./kpi";
+import type { IncidentBucket, KpiResult, GroupSummary } from "./kpi";
 import type { AppSettings, DailyWorkhour, Filters, Incident } from "./types";
+
+export interface IncidentStatsPayload {
+  periodLabel: string;
+  periodStart: string;
+  periodEnd: string;
+  periodBucket: IncidentBucket;
+  cumBucket: IncidentBucket;
+  daysWithoutLti: number;
+  typeA: { code: string; label: string }[];
+  typeB: { code: string; label: string }[];
+  cumulativeIncidents: Incident[];
+  top5: { name: string; value: number }[];
+  settings: AppSettings;
+}
+
+function countCodes(incidents: Incident[]): Record<string, number> {
+  const m: Record<string, number> = {};
+  for (const i of incidents) if (i.type_code) m[i.type_code] = (m[i.type_code] || 0) + 1;
+  return m;
+}
+
+const INDICATOR_ROWS: { key: keyof IncidentBucket; label: string }[] = [
+  { key: "nearMiss", label: "Near Miss (NM)" },
+  { key: "propertyDamage", label: "Property Damaged (PD)" },
+  { key: "firstAid", label: "First Aid (FAC)" },
+  { key: "medicalTreatment", label: "Medical Treatment (MTC)" },
+  { key: "restrictedWork", label: "Restricted Work (RWC)" },
+  { key: "recordable", label: "Recordable Incident" },
+  { key: "lti", label: "Lost Time Injury (LTI)" },
+  { key: "fatality", label: "Fatality" },
+  { key: "lossOfConsciousness", label: "Loss of Consciousness" },
+  { key: "wps", label: "Serious & Potentially Serious (WPS)" },
+  { key: "total", label: "Total Incident" },
+];
 
 // ---------- Import template column headers ----------
 export const IMPORT_HEADERS = [
@@ -439,4 +473,153 @@ function pairUp(cells: [string, string][]): string[][] {
     out.push([a[0], a[1], b[0], b[1]]);
   }
   return out;
+}
+
+// ---------- Incidents & Events Statistics: Excel ----------
+export function exportIncidentStatsExcel(p: IncidentStatsPayload) {
+  const wb = XLSX.utils.book_new();
+
+  const indRows: (string | number)[][] = [
+    [p.settings.site_name],
+    ["Incidents & Events Statistics"],
+    [`Period: ${p.periodLabel} (${p.periodStart} → ${p.periodEnd})`],
+    [`Generated: ${new Date().toLocaleString()}`],
+    [],
+    ["Indicator", "Last Period", "Cumulative To Date"],
+    ...INDICATOR_ROWS.map((r) => [
+      r.label,
+      p.periodBucket[r.key] as number,
+      p.cumBucket[r.key] as number,
+    ]),
+    [],
+    ["TRIR (cumulative)", Number(p.cumBucket.trir.toFixed(3)), ""],
+    ["LTIR (cumulative)", Number(p.cumBucket.ltir.toFixed(3)), ""],
+    ["WPS Rate", Number(p.cumBucket.wpsRate.toFixed(3)), ""],
+    ["Days Without LTI", p.daysWithoutLti, ""],
+  ];
+  const ws1 = XLSX.utils.aoa_to_sheet(indRows);
+  ws1["!cols"] = [{ wch: 38 }, { wch: 16 }, { wch: 20 }];
+  XLSX.utils.book_append_sheet(wb, ws1, "Indicators");
+
+  const counts = countCodes(p.cumulativeIncidents);
+  const typeSheet = (codes: { code: string; label: string }[], name: string) => {
+    const data = codes.map((c) => ({
+      Code: c.code,
+      Type: c.label,
+      "Project (CTP)": counts[c.code] || 0,
+      Benchmark: p.settings.benchmarks[c.code] ?? 0,
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    ws["!cols"] = [{ wch: 10 }, { wch: 44 }, { wch: 14 }, { wch: 12 }];
+    XLSX.utils.book_append_sheet(wb, ws, name);
+  };
+  typeSheet(p.typeA, "Type A");
+  typeSheet(p.typeB, "Type B");
+
+  const log = p.cumulativeIncidents.map((i) => ({
+    Date: i.incident_date,
+    Severity: INCIDENT_LABELS[i.incident_type],
+    Code: i.type_code || "",
+    Contractor: i.contractor_name || "",
+    Area: i.building_name || "",
+    "Lost Days": i.lost_days,
+    WPS: i.serious_potential ? "Yes" : "No",
+    "Loss of Consc.": i.loss_of_consciousness ? "Yes" : "No",
+    Description: i.description || "",
+  }));
+  const ws3 = XLSX.utils.json_to_sheet(log.length ? log : [{ Date: "(no incidents)" }]);
+  XLSX.utils.book_append_sheet(wb, ws3, "Incident Log");
+
+  XLSX.writeFile(wb, `CTPA_Incident_Statistics_${todayISO()}.xlsx`);
+}
+
+// ---------- Incidents & Events Statistics: PDF (Weekly EHS Report) ----------
+export function exportIncidentStatsPdf(p: IncidentStatsPayload, generatedBy: string) {
+  const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
+  const pageW = doc.internal.pageSize.getWidth();
+  const green: [number, number, number] = [0, 204, 121];
+  const dark: [number, number, number] = [15, 23, 42];
+
+  doc.setFillColor(...green);
+  doc.rect(0, 0, pageW, 70, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(18);
+  doc.setFont("helvetica", "bold");
+  doc.text("Weekly EHS Report — Incidents & Events", 40, 32);
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.text(p.settings.site_name, 40, 50);
+  doc.text(`${p.periodLabel}  (${p.periodStart} → ${p.periodEnd})`, 40, 62);
+  doc.setTextColor(...dark);
+
+  autoTable(doc, {
+    startY: 90,
+    head: [["Indicator", "Last Period", "Cumulative To Date"]],
+    body: INDICATOR_ROWS.map((r) => [
+      r.label,
+      fmtInt(p.periodBucket[r.key] as number),
+      fmtInt(p.cumBucket[r.key] as number),
+    ]),
+    theme: "grid",
+    headStyles: { fillColor: green, textColor: 255, fontStyle: "bold" },
+    styles: { fontSize: 9, cellPadding: 4 },
+    columnStyles: { 1: { halign: "right" }, 2: { halign: "right" } },
+  });
+  let y = (doc as any).lastAutoTable.finalY + 14;
+
+  autoTable(doc, {
+    startY: y,
+    head: [["TRIR", "LTIR", "WPS Rate", "Days Without LTI"]],
+    body: [[fmtNum(p.cumBucket.trir, 2), fmtNum(p.cumBucket.ltir, 2), fmtNum(p.cumBucket.wpsRate, 2), fmtInt(p.daysWithoutLti)]],
+    theme: "grid",
+    headStyles: { fillColor: dark, textColor: 255 },
+    styles: { fontSize: 10, halign: "center", cellPadding: 5 },
+  });
+  y = (doc as any).lastAutoTable.finalY + 18;
+
+  const counts = countCodes(p.cumulativeIncidents);
+  const typeBody = (codes: { code: string; label: string }[]) =>
+    codes.map((c) => [c.code, c.label, fmtInt(counts[c.code] || 0), fmtInt(p.settings.benchmarks[c.code] ?? 0)]);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.text("Type A Incidents", 40, y);
+  autoTable(doc, {
+    startY: y + 6,
+    head: [["Code", "Type", "Project", "Benchmark"]],
+    body: typeBody(p.typeA),
+    theme: "striped",
+    headStyles: { fillColor: dark, textColor: 255 },
+    styles: { fontSize: 8, cellPadding: 3 },
+    columnStyles: { 2: { halign: "right" }, 3: { halign: "right" } },
+  });
+  y = (doc as any).lastAutoTable.finalY + 14;
+  if (y > doc.internal.pageSize.getHeight() - 160) {
+    doc.addPage();
+    y = 50;
+  }
+  doc.setFont("helvetica", "bold");
+  doc.text("Type B Incidents", 40, y);
+  autoTable(doc, {
+    startY: y + 6,
+    head: [["Code", "Type", "Project", "Benchmark"]],
+    body: typeBody(p.typeB),
+    theme: "striped",
+    headStyles: { fillColor: dark, textColor: 255 },
+    styles: { fontSize: 8, cellPadding: 3 },
+    columnStyles: { 2: { halign: "right" }, 3: { halign: "right" } },
+  });
+
+  const pages = doc.getNumberOfPages();
+  for (let i = 1; i <= pages; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(120);
+    doc.text(
+      `Generated by ${generatedBy} · ${new Date().toLocaleString()} · Page ${i}/${pages}`,
+      40,
+      doc.internal.pageSize.getHeight() - 20,
+    );
+  }
+  doc.save(`CTPA_Weekly_EHS_Report_${todayISO()}.pdf`);
 }

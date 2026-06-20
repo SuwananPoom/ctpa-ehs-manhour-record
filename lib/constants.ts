@@ -46,6 +46,59 @@ export const INCIDENT_ORDER: IncidentType[] = [
   "ENVIRONMENTAL",
 ];
 
+// ---- Incident mechanism classification (cause/energy) ----
+export interface IncidentCode {
+  code: string;
+  label: string;
+}
+
+export const TYPE_A_INCIDENTS: IncidentCode[] = [
+  { code: "CFSE", label: "Collapse / Failure of structure & equipment" },
+  { code: "VEH", label: "Vehicle Incidents" },
+  { code: "FFH", label: "Falls From Height" },
+  { code: "SBMO", label: "Struck By Moving Object" },
+  { code: "SBFO", label: "Struck By Falling Object" },
+  { code: "CIBO", label: "Caught In Between Objects" },
+  { code: "SOD", label: "Suffocation / Drowning" },
+  { code: "CRANE", label: "Crane Related Incident" },
+  { code: "FE", label: "Fire & Explosion" },
+];
+
+export const TYPE_B_INCIDENTS: IncidentCode[] = [
+  { code: "STF", label: "Slips Trips Falls" },
+  { code: "ETEC", label: "Exposure to Electric Current" },
+  { code: "OTH", label: "Other Incident Type" },
+  { code: "CSBO", label: "Cut / Stabbed By Others" },
+  { code: "MAC", label: "Machinery Incident" },
+  { code: "DODS", label: "Discharge of Dangerous Substance" },
+  { code: "ETBM", label: "Exposure to Biological Materials" },
+  { code: "ETET", label: "Exposure to Extreme Temperature" },
+  { code: "ETHS", label: "Exposure to Hazardous Substance" },
+  { code: "PA", label: "Physical Assault" },
+];
+
+export const ALL_INCIDENT_CODES: IncidentCode[] = [...TYPE_A_INCIDENTS, ...TYPE_B_INCIDENTS];
+
+export const INCIDENT_CODE_LABEL: Record<string, string> = Object.fromEntries(
+  ALL_INCIDENT_CODES.map((c) => [c.code, c.label]),
+);
+
+export function codeGroup(code: string | null | undefined): "A" | "B" | null {
+  if (!code) return null;
+  if (TYPE_A_INCIDENTS.some((c) => c.code === code)) return "A";
+  if (TYPE_B_INCIDENTS.some((c) => c.code === code)) return "B";
+  return null;
+}
+
+// Leading = proactive (Near Miss / observations), Lagging = reactive (injuries)
+export const LAGGING_TYPES: IncidentType[] = [
+  "FIRST_AID",
+  "MEDICAL_TREATMENT",
+  "RESTRICTED_WORK",
+  "LOST_TIME_INJURY",
+  "FATALITY",
+];
+
 // Palette for charts (green-forward, professional)
 export const CHART_COLORS = [
   "#00cc79",
@@ -64,6 +117,7 @@ export const MODULE_TABS = [
   { key: "dashboard", label: "Safety KPI", icon: "LayoutDashboard" },
   { key: "entry", label: "Daily Manpower", icon: "ClipboardList" },
   { key: "incidents", label: "Incidents", icon: "TriangleAlert" },
+  { key: "stats", label: "Statistics", icon: "TrendingUp" },
   { key: "contractor", label: "Contractor", icon: "Building2" },
   { key: "building", label: "Building / Area", icon: "MapPin" },
   { key: "worktype", label: "Work Type", icon: "HardHat" },

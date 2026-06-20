@@ -107,6 +107,9 @@ export interface Incident {
   building_name: string | null;
   work_type_id: string | null;
   incident_type: IncidentType;
+  type_code: string | null; // Type A/B mechanism code (CFSE, VEH, STF, ...)
+  loss_of_consciousness: boolean;
+  serious_potential: boolean; // WPS — serious & potentially serious
   lost_days: number;
   description: string | null;
   corrective_action: string | null;
@@ -126,7 +129,8 @@ export interface AppSettings {
   baseline_observations: number;
   rolling_year_days: number;
   last_lti_date: string | null;
-  targets: { trir: number; ltir: number; observation_rate: number };
+  targets: { trir: number; ltir: number; observation_rate: number; wps: number };
+  benchmarks: Record<string, number>; // per Type A/B code + TRIR/LTIR/WPS industry values
   auth: { app_password: string; admin_pin: string };
 }
 
