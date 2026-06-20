@@ -80,6 +80,8 @@ interface AppContextValue {
   // status
   loading: boolean;
   error: string | null;
+  lastSyncAt: string | null;
+  realtimeStatus: string;
   refresh: () => Promise<void>;
   refreshMaster: () => Promise<void>;
   getStatHours: (
@@ -135,6 +137,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [filters, setFiltersState] = useState<Filters>(defaultFilters);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
+  const [realtimeStatus, setRealtimeStatus] = useState<string>("CONNECTING");
 
   // ----- restore session + filters -----
   useEffect(() => {
@@ -236,6 +240,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setIncidents((inc.data as Incident[]) || []);
       setObservationCount(obs.count || 0);
       if (g.data) setGlobals(g.data as Globals);
+      setLastSyncAt(new Date().toISOString());
     } catch (e: any) {
       setError(e?.message || "โหลดข้อมูลไม่สำเร็จ");
     }
@@ -267,7 +272,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       .channel("mh-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "mh_daily_workhours" }, ping)
       .on("postgres_changes", { event: "*", schema: "public", table: "mh_incidents" }, ping)
-      .subscribe();
+      .subscribe((status) => setRealtimeStatus(status));
     return () => {
       supabase.removeChannel(channel);
     };
@@ -327,6 +332,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     resetFilters,
     loading,
     error,
+    lastSyncAt,
+    realtimeStatus,
     refresh,
     refreshMaster,
     getStatHours,

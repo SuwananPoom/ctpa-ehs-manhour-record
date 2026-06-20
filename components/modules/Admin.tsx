@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { Database, Plus, Save, Trash2, Wrench, Users2, Sliders } from "lucide-react";
+import { Database, Plus, Save, Trash2, Wrench, Users2, Sliders, Activity } from "lucide-react";
+import Diagnostics from "@/components/modules/Diagnostics";
 import { useApp } from "@/context/AppContext";
 import { supabase } from "@/lib/supabaseClient";
 import { ALL_INCIDENT_CODES, ROLE_LABELS } from "@/lib/constants";
@@ -10,7 +11,7 @@ import { Badge, Empty, Section, useToast } from "@/components/ui";
 import { logAudit } from "@/lib/audit";
 import type { AppSettings, ContractorType, Role } from "@/lib/types";
 
-type Tab = "master" | "users" | "settings" | "tools";
+type Tab = "master" | "users" | "settings" | "tools" | "diagnostics";
 
 export default function Admin() {
   const app = useApp();
@@ -30,6 +31,7 @@ export default function Admin() {
     { key: "users", label: "ผู้ใช้งาน", icon: <Users2 size={15} /> },
     { key: "settings", label: "KPI Settings", icon: <Sliders size={15} /> },
     { key: "tools", label: "เครื่องมือ", icon: <Wrench size={15} /> },
+    { key: "diagnostics", label: "Diagnostics", icon: <Activity size={15} /> },
   ];
 
   return (
@@ -51,6 +53,7 @@ export default function Admin() {
       {tab === "users" && <UsersPanel />}
       {tab === "settings" && <SettingsPanel />}
       {tab === "tools" && <ToolsPanel />}
+      {tab === "diagnostics" && <Diagnostics />}
     </div>
   );
 }

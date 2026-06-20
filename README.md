@@ -44,9 +44,15 @@ mh_work_types       ประเภทงาน (+ flag high_risk)
 mh_users            รายชื่อผู้ใช้ + บทบาท
 mh_daily_workhours  บันทึกรายวัน (total_manpower & total_manhours เป็น generated column)
 mh_incidents        อุบัติการณ์ (ใช้คำนวณ TRIR/LTIR/Days without LTI)
-mh_settings         ตั้งค่า KPI basis, baseline, targets, รหัสผ่าน (jsonb)
+mh_settings         ตั้งค่า KPI basis, baseline, targets, benchmarks, รหัสผ่าน (jsonb)
 mh_audit_log        บันทึกการใช้งาน
+mh_diagnostics      sandbox สำหรับ self-test (realtime/insert) — ลบอัตโนมัติ
 ```
+
+> **Realtime sync:** ตาราง `mh_daily_workhours`, `mh_incidents`, `mh_diagnostics` ถูกเพิ่มเข้า publication `supabase_realtime` แล้ว — ข้อมูล sync ข้ามอุปกรณ์แบบเรียลไทม์จริง
+
+### 🩺 Diagnostics (Admin → Diagnostics)
+หน้าตรวจสุขภาพระบบ (อ่านอย่างเดียว ยกเว้นปุ่ม Test): Database status & response time, record counts, Storage round-trip test, Realtime sync test (insert→verify→delete ใน sandbox), Export/Dashboard/Image checks, Environment, System logs, JSON Backup + Verify integrity, และ System Health Summary (🟢/🟡/🔴) — เข้าได้เฉพาะ Admin
 
 ### ตรรกะการคำนวณ KPI (`lib/kpi.ts`)
 - `Total Man-hours = Σ manpower × (working_hours + ot_hours)`
